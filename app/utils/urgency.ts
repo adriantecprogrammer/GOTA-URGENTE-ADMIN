@@ -37,17 +37,19 @@ export const SEVERITY: Record<Severity, { label: string, hint: string, weight: n
   inundacion: { label: 'Inundación', hint: 'Agua acumulada, brota del suelo o tubería rota', weight: 3, icon: 'i-lucide-waves' }
 }
 
-export const STATUS: Record<Status, { label: string, color: 'warning' | 'info' | 'success' }> = {
-  pendiente: { label: 'Pendiente', color: 'warning' },
-  atencion: { label: 'En atención', color: 'info' },
-  resuelto: { label: 'Resuelto', color: 'success' }
+/** `step`: how far along the repair is, out of 3. Drawn as filled drops by StatusSteps. */
+export const STATUS: Record<Status, { label: string, step: 1 | 2 | 3 }> = {
+  pendiente: { label: 'Pendiente', step: 1 },
+  atencion: { label: 'En atención', step: 2 },
+  resuelto: { label: 'Resuelto', step: 3 }
 }
 
 export const LEVEL: Record<Level, { label: string, hex: string }> = {
   critica: { label: 'Crítica', hex: '#DE1135' },
   alta: { label: 'Alta', hex: '#F56A00' },
-  media: { label: 'Media', hex: '#E8A800' },
-  baja: { label: 'Baja', hex: '#0E8345' }
+  // Colour means "act on this": only the top two levels get one. The rest share the brand ink.
+  media: { label: 'Media', hex: '#002F59' },
+  baja: { label: 'Baja', hex: '#002F59' }
 }
 
 export function distanceM(a: { lat: number, lng: number }, b: { lat: number, lng: number }) {

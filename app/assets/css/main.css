@@ -1,51 +1,96 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
 
-/* Base-inspired: neutral greys, black primary actions, one brand hue for water. */
+/* Base-inspired structure, water palette: neutral greys carry the surfaces, navy (800/950) replaces black
+   as ink, 500 is the one action colour, cyan (300) is a small accent. Palette swatches: 300, 400, 500, 800, 950. */
 @theme static {
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  /* Voice: titles and figures. Body stays in Inter. */
+  --font-display: 'Archivo', ui-sans-serif, system-ui, sans-serif;
 
-  --color-gota-50: #EEF6FF;
-  --color-gota-100: #D9EBFF;
-  --color-gota-200: #B6D8FF;
-  --color-gota-300: #84BDFF;
-  --color-gota-400: #4A98FF;
-  --color-gota-500: #1F74F5;
-  --color-gota-600: #0F5BDB;
-  --color-gota-700: #0D48B0;
-  --color-gota-800: #113E8C;
-  --color-gota-900: #133770;
-  --color-gota-950: #0E2246;
+  /* Shape scale: 4 / 8 / 12. Tags 4, controls and chips 8, cards and sheets 12. */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 12px;
+  /* Signature shape: one square corner, three round — a drop. Logo mark, urgency scores, main action. */
+  --radius-drop: 2px 1rem 1rem 1rem;
+  --radius-cta: 2px 9999px 9999px 9999px;
+
+  --color-gota-50: #EFFAFE;
+  --color-gota-100: #D6F3FC;
+  --color-gota-200: #A8E7F8;
+  --color-gota-300: #04D7F2;
+  --color-gota-400: #079CD8;
+  --color-gota-500: #0278C0;
+  --color-gota-600: #02609C;
+  --color-gota-700: #014A7A;
+  --color-gota-800: #002F59;
+  --color-gota-900: #011E40;
+  --color-gota-950: #010E26;
 
   --color-critica: #DE1135;
   --color-alta: #F56A00;
-  --color-media: #E8A800;
-  --color-baja: #0E8345;
 }
 
 :root {
   --ui-radius: 0.5rem;
-  --ui-text-muted: var(--ui-color-neutral-500);
   font-feature-settings: "cv11", "ss01";
 }
 
 .light {
+  /* neutral-500 is 4.3:1 on bg-muted; 600 passes AA on every surface. Dark keeps Nuxt UI's neutral-400. */
+  --ui-text-muted: var(--ui-color-neutral-600);
+  --ui-text-highlighted: var(--color-gota-950);
+  --ui-bg-inverted: var(--color-gota-800);
+  --ui-border-inverted: var(--color-gota-800);
+  /* 600, not 500: blue text on its own 10% tint (subtle buttons, badges, alerts) needs it to pass AA. */
+  --ui-primary: var(--color-gota-600);
+  --ui-info: var(--color-gota-600);
   --ui-bg-muted: #F3F3F3;
   --ui-bg-elevated: #EEEEEE;
   --ui-border: #E8E8E8;
 }
 
+/* Dark theme (the dashboard; the citizen app is light-only): the navy end of the palette instead of neutral greys. */
+.dark {
+  --ui-bg: var(--color-gota-950);
+  --ui-bg-muted: #011630;
+  --ui-bg-elevated: var(--color-gota-900);
+  --ui-bg-accented: var(--color-gota-800);
+  --ui-border: #0A2A4D;
+  --ui-border-muted: #0A2A4D;
+  --ui-border-accented: var(--color-gota-700);
+  --ui-text-muted: #9DB2C7;
+  --ui-text-inverted: var(--color-gota-950);
+}
+
 html, body, #__nuxt { height: 100%; }
+
+/* `display` puts figures (scores, counts, the wordmark) in the same voice as titles. */
+@utility display { font-family: var(--font-display); font-stretch: 112%; }
+@layer base {
+  h1, h2 { @apply display; }
+}
+
+/* Tailwind v4 resets buttons to the default cursor. */
+@layer base {
+  button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
+}
 
 /* Base elevation: one soft shadow for floating surfaces over the map. */
 @utility surface-float {
   background: var(--ui-bg);
-  border-radius: calc(var(--ui-radius) * 2);
+  border-radius: var(--radius-xl);
   box-shadow: 0 0 0 1px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.12);
 }
 
 
 .maplibregl-ctrl-attrib { font-size: 10px; }
-/* Keep map controls clear of the floating panel / bottom sheet. */
-.maplibregl-ctrl-bottom-right { bottom: var(--pad-bottom, 0); transition: bottom .3s; }
-.maplibregl-ctrl-bottom-left { left: var(--pad-left, 0); }
+/* Keep map controls clear of the floating panel / bottom sheet. `.maplibregl-map` prefix: must outrank MapLibre's own CSS, which loads later. */
+.maplibregl-map .maplibregl-ctrl-bottom-right { bottom: var(--pad-bottom, 0); transition: bottom .3s; }
+.maplibregl-map .maplibregl-ctrl-bottom-left { left: var(--pad-left, 0); }
+/* 29px zoom buttons are too small for touch; pinch and double-tap cover it on phones. */
+@media (max-width: 1023px) { .maplibregl-ctrl-group { display: none; } }

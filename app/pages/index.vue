@@ -9,10 +9,10 @@ const selectedId = ref<string | null>(null)
 
 const count = (s: Status) => incidents.value.filter(i => i.status === s).length
 const tabs = computed(() => [
-  { value: 'activas', label: 'Activas', badge: count('pendiente') + count('atencion') },
-  { value: 'pendiente', label: 'Pendientes', badge: count('pendiente') },
-  { value: 'atencion', label: 'En atención', badge: count('atencion') },
-  { value: 'resuelto', label: 'Resueltas', badge: count('resuelto') }
+  { value: 'activas', label: 'Activas', count: count('pendiente') + count('atencion') },
+  { value: 'pendiente', label: 'Pendientes', count: count('pendiente') },
+  { value: 'atencion', label: 'En atención', count: count('atencion') },
+  { value: 'resuelto', label: 'Resueltas', count: count('resuelto') }
 ])
 
 const rows = computed(() => incidents.value.filter(i => filter.value === 'activas' ? i.status !== 'resuelto' : i.status === filter.value))
@@ -100,7 +100,7 @@ function onReset() {
                 class="size-4"
               />
             </div>
-            <p class="mt-2 text-[32px] font-bold leading-none tracking-tight text-highlighted tabular-nums">
+            <p class="display mt-2 text-[32px] font-bold leading-none tracking-tight text-highlighted tabular-nums">
               {{ k.value }}
             </p>
             <p class="mt-1.5 text-xs text-muted">
@@ -126,7 +126,11 @@ function onReset() {
               :content="false"
               color="neutral"
               size="sm"
-            />
+            >
+              <template #trailing="{ item }">
+                <span class="tabular-nums opacity-60">{{ item.count }}</span>
+              </template>
+            </UTabs>
           </div>
 
           <div class="min-h-0 flex-1 overflow-auto">
@@ -192,15 +196,7 @@ function onReset() {
                     {{ n + 1 }}
                   </td>
                   <td class="py-3">
-                    <div class="flex flex-col gap-1.5">
-                      <UrgencyBadge :incident="i" />
-                      <div class="h-1 w-24 overflow-hidden rounded-full bg-elevated">
-                        <div
-                          class="h-full rounded-full"
-                          :style="{ width: `${i.urgency}%`, backgroundColor: i.status === 'resuelto' ? '#AFAFAF' : LEVEL[i.level].hex }"
-                        />
-                      </div>
-                    </div>
+                    <UrgencyScore :incident="i" />
                   </td>
                   <td class="max-w-0 py-3 pl-4 pr-6">
                     <p class="truncate font-medium text-highlighted">
@@ -217,19 +213,14 @@ function onReset() {
                     {{ timeAgo(i.firstAt) }}
                   </td>
                   <td class="py-3 pl-6">
-                    <UBadge
-                      :color="STATUS[i.status].color"
-                      variant="subtle"
-                      :label="STATUS[i.status].label"
-                      class="whitespace-nowrap"
-                    />
+                    <StatusSteps :status="i.status" />
                   </td>
                   <td class="py-3 pl-3 pr-4 text-right">
                     <UButton
                       v-if="NEXT[i.status]"
                       size="sm"
-                      color="neutral"
-                      :variant="i.status === 'pendiente' ? 'solid' : 'outline'"
+                      :color="i.status === 'pendiente' ? 'primary' : 'neutral'"
+                      :variant="i.status === 'pendiente' ? 'subtle' : 'outline'"
                       :label="NEXT[i.status]!.label"
                       class="whitespace-nowrap"
                       @click.stop="advance(i)"
@@ -286,7 +277,8 @@ function onReset() {
           <UButton
             v-if="NEXT[selected.status]"
             block
-            color="neutral"
+            size="lg"
+            color="primary"
             :icon="NEXT[selected.status]!.icon"
             :label="NEXT[selected.status]!.label"
             @click="advance(selected)"

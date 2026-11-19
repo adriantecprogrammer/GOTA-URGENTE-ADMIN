@@ -2,6 +2,10 @@
 import * as maplibregl from 'maplibre-gl'
 import type { ExpressionSpecification, GeoJSONSource, MapLayerMouseEvent } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+// MapLibre v6 looks for its worker next to the bundle chunk, where Vite never copies it; ?url emits it as an asset.
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
+
+maplibregl.setWorkerUrl(workerUrl)
 
 const props = defineProps<{
   incidents: Incident[]
@@ -10,12 +14,19 @@ const props = defineProps<{
   picking?: boolean
   /** Area covered by floating UI; map center and pin sit in the visible remainder. */
   padding?: { left: number, bottom: number }
+  /** Thumbnail mode: zoom out to show every open incident; restores the previous view when turned off. */
+  overview?: boolean
 }>()
 const emit = defineEmits<{ select: [id: string], center: [pos: { lat: number, lng: number }] }>()
 
 const container = ref<HTMLDivElement>()
 const moving = ref(false)
 let map: maplibregl.Map
+
+let view: { center: maplibregl.LngLatLike, zoom: number } | undefined
+// Last flyTo destination. Later camera moves (padding change, leaving overview) re-aim at it instead of
+// cancelling the flight; cleared as soon as the user moves the map themselves.
+let target: typeof view
 
 const RESOLVED_HEX = '#AFAFAF'
 const DOT_LAYERS = ['inc-dot']
@@ -46,6 +57,9 @@ onMounted(async () => {
     attributionControl: { compact: true }
   })
   map.setPadding({ top: 0, right: 0, left: 0, bottom: 0, ...props.padding })
+  if (props.overview) saveViewAndFit()
+  // The thumbnail shrinks over a transition; keep refitting until it settles at its final size.
+  map.on('resize', () => props.overview && fitOpen())
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right')
 
   map.on('load', () => {
@@ -77,7 +91,7 @@ onMounted(async () => {
       paint: {
         'circle-color': 'transparent',
         'circle-radius': ['+', radius, 5],
-        'circle-stroke-color': '#000000',
+        'circle-stroke-color': '#002F59',
         'circle-stroke-width': 3
       }
     })
@@ -98,7 +112,10 @@ onMounted(async () => {
   const cursor = (c: string) => () => (map.getCanvas().style.cursor = props.picking ? '' : c)
   map.on('mouseenter', DOT_LAYERS, cursor('pointer'))
   map.on('mouseleave', DOT_LAYERS, cursor(''))
-  map.on('movestart', () => (moving.value = true))
+  map.on('movestart', (e) => {
+    moving.value = true
+    if ('originalEvent' in e && e.originalEvent) target = undefined
+  })
   map.on('moveend', () => {
     moving.value = false
     if (props.picking) emitCenter()
@@ -107,6 +124,24 @@ onMounted(async () => {
 
 onBeforeUnmount(() => map?.remove())
 
+function saveViewAndFit() {
+  view = { center: map.getCenter(), zoom: map.getZoom() }
+  fitOpen()
+}
+function fitOpen() {
+  const open = props.incidents.filter(i => i.status !== 'resuelto')
+  if (!open.length) return
+  const b = new maplibregl.LngLatBounds()
+  for (const i of open) b.extend([i.lng, i.lat])
+  map.setPadding({ top: 0, right: 0, bottom: 0, left: 0 })
+  map.fitBounds(b, { padding: 16, animate: false })
+}
+watch(() => props.overview, (on) => {
+  if (!map) return
+  if (on) saveViewAndFit()
+  else if (target ?? view) map.jumpTo((target ?? view)!)
+})
+
 function emitCenter() {
   const c = map.getCenter()
   emit('center', { lat: c.lat, lng: c.lng })
@@ -114,11 +149,13 @@ function emitCenter() {
 
 watch(geojson, data => (map?.getSource('incidents') as GeoJSONSource | undefined)?.setData(data))
 watch(() => props.selectedId, id => map?.getLayer('inc-selected') && map.setFilter('inc-selected', ['==', ['get', 'id'], id ?? '']))
-watch(() => props.padding, p => p && map?.easeTo({ padding: { top: 0, right: 0, ...p }, duration: 300 }), { deep: true })
+watch(() => props.padding, p => p && !props.overview && map?.easeTo({ padding: { top: 0, right: 0, ...p }, ...target, duration: 300 }), { deep: true })
 watch(() => props.picking, p => p && map && emitCenter())
 
 function flyTo(pos: { lat: number, lng: number }, zoom = 16) {
-  map?.flyTo({ center: [pos.lng, pos.lat], zoom: Math.max(map.getZoom(), zoom), duration: 800, essential: true })
+  if (!map) return
+  target = { center: [pos.lng, pos.lat], zoom: Math.max(map.getZoom(), zoom) }
+  map.flyTo({ ...target, duration: 800 })
 }
 
 defineExpose({ flyTo })
@@ -145,13 +182,13 @@ defineExpose({ flyTo })
         class="flex flex-col items-center transition-transform duration-150"
         :class="moving ? '-translate-y-2' : ''"
       >
-        <div class="grid size-9 place-items-center rounded-full bg-black text-white shadow-lg">
+        <div class="grid size-9 place-items-center rounded-full bg-inverted text-gota-300 shadow-lg">
           <UIcon
             name="i-lucide-droplet"
             class="size-4"
           />
         </div>
-        <div class="h-3 w-0.5 bg-black" />
+        <div class="h-3 w-0.5 bg-inverted" />
       </div>
       <div class="mx-auto -mt-0.5 h-1.5 w-3 rounded-full bg-black/30 blur-[1px]" />
     </div>

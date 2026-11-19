@@ -14,12 +14,19 @@ export default defineNuxtConfig({
 
   compatibilityDate: '2026-06-30',
 
-  // MapLibre v6 loads its worker via import.meta.url; pre-bundling breaks that path.
-  vite: { optimizeDeps: { exclude: ['maplibre-gl'] } },
-
   eslint: {
     config: {
       stylistic: { commaDangle: 'never', braceStyle: '1tbs' }
     }
+  },
+
+  // Archivo's width axis isn't fetched by default; titles and figures use it slightly expanded.
+  fonts: {
+    families: [{
+      name: 'Archivo',
+      provider: 'google',
+      weights: ['500 800'],
+      providerOptions: { google: { experimental: { variableAxis: { wdth: [['100', '125']] } } } }
+    }]
   }
 })
