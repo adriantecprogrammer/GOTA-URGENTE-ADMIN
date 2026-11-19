@@ -1,6 +1,6 @@
 <template>
-  <span class="inline-flex items-center gap-2 font-bold tracking-tight text-highlighted">
-    <span class="grid size-7 place-items-center rounded-md bg-black text-white dark:bg-white dark:text-black">
+  <span class="inline-flex items-center gap-2 display font-bold tracking-tight text-highlighted">
+    <span class="grid size-7 place-items-center rounded-drop bg-gota-800 text-gota-300">
       <UIcon
         name="i-lucide-droplet"
         class="size-4"

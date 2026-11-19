@@ -9,3 +9,5 @@ export function timeAgo(ts: number, now = Date.now()) {
 }
 
 export const fmtCoords = (p: { lat: number, lng: number }) => `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`
+
+export const fmtLiters = (l: number) => `${new Intl.NumberFormat('es-MX', { notation: l >= 1e4 ? 'compact' : 'standard' }).format(l)} L`
