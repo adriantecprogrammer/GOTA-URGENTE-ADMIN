@@ -1,0 +1,51 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+/* Base-inspired: neutral greys, black primary actions, one brand hue for water. */
+@theme static {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  --color-gota-50: #EEF6FF;
+  --color-gota-100: #D9EBFF;
+  --color-gota-200: #B6D8FF;
+  --color-gota-300: #84BDFF;
+  --color-gota-400: #4A98FF;
+  --color-gota-500: #1F74F5;
+  --color-gota-600: #0F5BDB;
+  --color-gota-700: #0D48B0;
+  --color-gota-800: #113E8C;
+  --color-gota-900: #133770;
+  --color-gota-950: #0E2246;
+
+  --color-critica: #DE1135;
+  --color-alta: #F56A00;
+  --color-media: #E8A800;
+  --color-baja: #0E8345;
+}
+
+:root {
+  --ui-radius: 0.5rem;
+  --ui-text-muted: var(--ui-color-neutral-500);
+  font-feature-settings: "cv11", "ss01";
+}
+
+.light {
+  --ui-bg-muted: #F3F3F3;
+  --ui-bg-elevated: #EEEEEE;
+  --ui-border: #E8E8E8;
+}
+
+html, body, #__nuxt { height: 100%; }
+
+/* Base elevation: one soft shadow for floating surfaces over the map. */
+@utility surface-float {
+  background: var(--ui-bg);
+  border-radius: calc(var(--ui-radius) * 2);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.12);
+}
+
+
+.maplibregl-ctrl-attrib { font-size: 10px; }
+/* Keep map controls clear of the floating panel / bottom sheet. */
+.maplibregl-ctrl-bottom-right { bottom: var(--pad-bottom, 0); transition: bottom .3s; }
+.maplibregl-ctrl-bottom-left { left: var(--pad-left, 0); }
