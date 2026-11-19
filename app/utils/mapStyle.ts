@@ -84,3 +84,6 @@ export async function gotaMapStyle(): Promise<StyleSpecification> {
     })
   return style
 }
+
+/** Map default center: Catedral de Morelia, Michoacán. Change to your municipality. */
+export const CITY_CENTER = { lat: 19.70267, lng: -101.19230 }

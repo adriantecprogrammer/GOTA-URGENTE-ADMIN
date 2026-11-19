@@ -1,5 +1,14 @@
 <script setup lang="ts">
-const { incidents, reports, setStatus, reset } = useReports()
+import { useIntervalFn, useNow } from '@vueuse/core'
+import type { AdminLeak, AdminLeakPatch } from '~/services/admin'
+import type { Zone } from '~/services/zones'
+
+useSeoMeta({ title: 'Panel operativo · Gota Urgente' })
+
+const { $api } = useNuxtApp()
+const { logout } = useAdminSession()
+const { leaks: { data: leaks, error, refresh }, zones: { data: zones }, crews: { data: crews }, update, assignZone } = useAdminLeaks()
+const { data: me } = useAsyncData('me', () => $api.admin.me())
 const toast = useToast()
 const map = useTemplateRef('map')
 
@@ -7,52 +16,72 @@ type Filter = 'activas' | Status
 const filter = ref<Filter>('activas')
 const selectedId = ref<string | null>(null)
 
-const count = (s: Status) => incidents.value.filter(i => i.status === s).length
+const count = (s: Status) => leaks.value.filter(l => l.status === s).length
 const tabs = computed(() => [
-  { value: 'activas', label: 'Activas', count: count('pendiente') + count('atencion') },
+  { value: 'activas', label: 'Activas', count: count('pendiente') + count('en_atencion') },
   { value: 'pendiente', label: 'Pendientes', count: count('pendiente') },
-  { value: 'atencion', label: 'En atención', count: count('atencion') },
-  { value: 'resuelto', label: 'Resueltas', count: count('resuelto') }
+  { value: 'en_atencion', label: 'En atención', count: count('en_atencion') },
+  { value: 'resuelta', label: 'Resueltas', count: count('resuelta') },
+  { value: 'descartada', label: 'Descartadas', count: count('descartada') }
 ])
 
-const rows = computed(() => incidents.value.filter(i => filter.value === 'activas' ? i.status !== 'resuelto' : i.status === filter.value))
-const selected = computed(() => incidents.value.find(i => i.id === selectedId.value))
+// The API already sorts by urgency, most urgent first.
+const rows = computed(() => leaks.value.filter(l => filter.value === 'activas' ? isOpen(l.status) : l.status === filter.value))
+const selected = computed(() => leaks.value.find(l => l.id === selectedId.value))
+
+// Live liters counter: server total at fetch time + what open leaks have lost since, ticking every second.
+const now = useNow({ scheduler: cb => useIntervalFn(cb, 1000) })
+const fetchedAt = ref(Date.now())
+watch(leaks, () => (fetchedAt.value = Date.now()))
+const open = computed(() => leaks.value.filter(l => isOpen(l.status)))
+const litersLive = computed(() => {
+  const perDay = open.value.reduce((s, l) => s + l.liters_per_day, 0)
+  return open.value.reduce((s, l) => s + l.liters_wasted, 0) + perDay * (now.value.getTime() - fetchedAt.value) / 864e5
+})
 
 const kpis = computed(() => [
-  { label: 'Fugas críticas', value: incidents.value.filter(i => i.level === 'critica' && i.status === 'pendiente').length, hint: 'pendientes de asignar', icon: 'i-lucide-siren' },
+  { label: 'Fugas críticas', value: leaks.value.filter(l => l.urgency_level === 'critica' && l.status === 'pendiente').length, hint: 'pendientes de asignar', icon: 'i-lucide-siren' },
   { label: 'Pendientes', value: count('pendiente'), hint: 'sin cuadrilla', icon: 'i-lucide-clock' },
-  { label: 'En atención', value: count('atencion'), hint: 'cuadrillas en sitio', icon: 'i-lucide-hard-hat' },
-  { label: 'Reportes ciudadanos', value: reports.value.length, hint: `agrupados en ${incidents.value.length} fugas`, icon: 'i-lucide-users' }
+  { label: 'En atención', value: count('en_atencion'), hint: 'cuadrillas en sitio', icon: 'i-lucide-hard-hat' },
+  { label: 'Agua perdida', value: fmtLiters(Math.round(litersLive.value)), hint: `${fmtLiters(open.value.reduce((s, l) => s + l.liters_per_day, 0))} al día en fugas abiertas`, icon: 'i-lucide-droplets' }
 ])
 
-const NEXT: Partial<Record<Status, { to: Status, label: string, icon: string }>> = {
-  pendiente: { to: 'atencion', label: 'Asignar cuadrilla', icon: 'i-lucide-hard-hat' },
-  atencion: { to: 'resuelto', label: 'Marcar resuelta', icon: 'i-lucide-check' }
+/** Every change gets a toast with Deshacer, which re-PATCHes the previous values. */
+async function act(leak: AdminLeak, patch: AdminLeakPatch) {
+  const undo: AdminLeakPatch = {}
+  if ('status' in patch) undo.status = leak.status
+  if ('crew_id' in patch) undo.crew_id = leak.crew_id
+  if ('severity' in patch) undo.severity = leak.max_severity
+  try {
+    const l = await update(leak.id, patch)
+    toast.add({
+      title: patch.status ? `#${l.id.slice(0, 8)} · ${STATUS[l.status].label}` : 'Fuga actualizada',
+      description: [l.crew_name, patch.severity && `Severidad: ${SEVERITY[l.max_severity].label}`].filter(Boolean).join(' · ') || undefined,
+      icon: 'i-lucide-check',
+      actions: [{ label: 'Deshacer', color: 'neutral', variant: 'outline', onClick: () => { update(leak.id, undo).catch(fail) } }]
+    })
+  } catch (e) {
+    fail(e)
+  }
 }
 
-function advance(i: Incident) {
-  const next = NEXT[i.status]
-  if (!next) return
-  const prev = i.status
-  setStatus(i, next.to)
-  toast.add({
-    title: `${i.id} · ${STATUS[next.to].label}`,
-    description: i.address,
-    icon: next.icon,
-    actions: [{ label: 'Deshacer', color: 'neutral', variant: 'outline', onClick: () => setStatus(i, prev) }]
-  })
+async function onAssignZone(zone: Zone, crewId: number) {
+  try {
+    const r = await assignZone(zone.leak_ids, crewId)
+    toast.add({ title: `Cuadrilla asignada a ${r.updated} fugas`, description: crews.value.find(c => c.id === crewId)?.name, icon: 'i-lucide-hard-hat' })
+  } catch (e) {
+    fail(e)
+  }
+}
+
+function fail(e: unknown) {
+  toast.add({ title: 'No se pudo guardar el cambio', description: apiErrorMessage(e), color: 'error', icon: 'i-lucide-circle-alert' })
 }
 
 function select(id: string) {
   selectedId.value = id
-  const i = selected.value
-  if (i) map.value?.flyTo(i, 15)
-}
-
-function onReset() {
-  reset()
-  selectedId.value = null
-  toast.add({ title: 'Datos de demostración restaurados', icon: 'i-lucide-rotate-ccw' })
+  const l = selected.value
+  if (l) map.value?.flyTo(l, 15)
 }
 </script>
 
@@ -70,17 +99,18 @@ function onReset() {
         class="h-6"
       />
       <span class="font-semibold text-highlighted">Panel operativo</span>
-      <div class="ms-auto flex items-center gap-1">
-        <UTooltip text="Restaurar datos de demostración">
-          <UButton
-            icon="i-lucide-rotate-ccw"
-            color="neutral"
-            variant="ghost"
-            aria-label="Restaurar datos de demostración"
-            @click="onReset"
-          />
-        </UTooltip>
-        <UColorModeButton />
+      <div class="ms-auto flex items-center gap-2">
+        <span
+          v-if="me"
+          class="hidden text-sm text-muted sm:inline"
+        >{{ me.name }}</span>
+        <UButton
+          icon="i-lucide-log-out"
+          color="neutral"
+          variant="ghost"
+          aria-label="Cerrar sesión"
+          @click="logout"
+        />
       </div>
     </header>
 
@@ -162,10 +192,10 @@ function onReset() {
                     Reportes
                   </th>
                   <th
-                    class="hidden py-3 pl-6 font-medium xl:table-cell"
+                    class="hidden whitespace-nowrap py-3 pl-6 font-medium xl:table-cell"
                     scope="col"
                   >
-                    Abierta
+                    Cuadrilla
                   </th>
                   <th
                     class="py-3 pl-6 font-medium"
@@ -183,54 +213,91 @@ function onReset() {
               </thead>
               <tbody>
                 <tr
-                  v-for="(i, n) in rows"
-                  :key="i.id"
+                  v-for="(l, n) in rows"
+                  :key="l.id"
                   class="cursor-pointer border-b border-default transition-colors last:border-0 hover:bg-muted"
-                  :class="i.id === selectedId ? 'bg-muted' : ''"
-                  :aria-selected="i.id === selectedId"
+                  :class="l.id === selectedId ? 'bg-muted' : ''"
+                  :aria-selected="l.id === selectedId"
                   tabindex="0"
-                  @click="select(i.id)"
-                  @keydown.enter.self="select(i.id)"
+                  @click="select(l.id)"
+                  @keydown.enter.self="select(l.id)"
                 >
                   <td class="py-3 pl-4 pr-4 text-muted tabular-nums">
                     {{ n + 1 }}
                   </td>
                   <td class="py-3">
-                    <UrgencyScore :incident="i" />
+                    <UrgencyScore :leak="l" />
                   </td>
                   <td class="max-w-0 py-3 pl-4 pr-6">
                     <p class="truncate font-medium text-highlighted">
-                      {{ i.address ?? fmtCoords(i) }}
+                      {{ addressOf(l) ?? fmtCoords(l) }}
                     </p>
-                    <p class="truncate text-muted">
-                      {{ i.id }} · {{ SEVERITY[i.severity].label }}
+                    <p class="flex items-center gap-1.5 truncate text-muted">
+                      {{ SEVERITY[l.max_severity].label }} · {{ fmtLiters(l.liters_wasted) }} · {{ timeAgo(Date.parse(l.first_reported_at)) }}
+                      <UIcon
+                        v-if="l.zone_size >= 3"
+                        name="i-lucide-network"
+                        class="size-3.5 shrink-0 text-error"
+                        aria-label="En zona de falla conjunta"
+                      />
+                      <UIcon
+                        v-if="l.is_recurrent"
+                        name="i-lucide-history"
+                        class="size-3.5 shrink-0 text-warning"
+                        aria-label="Reincidente"
+                      />
                     </p>
                   </td>
                   <td class="hidden py-3 text-right font-medium text-highlighted tabular-nums md:table-cell">
-                    {{ i.reports.length }}
+                    {{ l.report_count }}
                   </td>
                   <td class="hidden whitespace-nowrap py-3 pl-6 text-muted xl:table-cell">
-                    {{ timeAgo(i.firstAt) }}
+                    {{ l.crew_name ?? '—' }}
                   </td>
                   <td class="py-3 pl-6">
-                    <StatusSteps :status="i.status" />
+                    <StatusSteps :status="l.status" />
                   </td>
-                  <td class="py-3 pl-3 pr-4 text-right">
+                  <td
+                    class="py-3 pl-3 pr-4 text-right"
+                    @click.stop
+                  >
+                    <CrewMenu
+                      v-if="l.status === 'pendiente'"
+                      :crews="crews"
+                      @pick="crew_id => act(l, { status: 'en_atencion', crew_id })"
+                    >
+                      <UButton
+                        size="sm"
+                        color="primary"
+                        variant="subtle"
+                        label="Asignar cuadrilla"
+                        trailing-icon="i-lucide-chevron-down"
+                        class="whitespace-nowrap"
+                      />
+                    </CrewMenu>
                     <UButton
-                      v-if="NEXT[i.status]"
+                      v-else-if="l.status === 'en_atencion'"
                       size="sm"
-                      :color="i.status === 'pendiente' ? 'primary' : 'neutral'"
-                      :variant="i.status === 'pendiente' ? 'subtle' : 'outline'"
-                      :label="NEXT[i.status]!.label"
+                      color="neutral"
+                      variant="outline"
+                      label="Marcar resuelta"
                       class="whitespace-nowrap"
-                      @click.stop="advance(i)"
+                      @click="act(l, { status: 'resuelta' })"
                     />
                   </td>
                 </tr>
               </tbody>
             </table>
             <UEmpty
-              v-if="!rows.length"
+              v-if="error"
+              icon="i-lucide-cloud-off"
+              title="No pudimos cargar las fugas"
+              :description="apiErrorMessage(error)"
+              :actions="[{ label: 'Reintentar', icon: 'i-lucide-refresh-cw', color: 'neutral', variant: 'soft', onClick: () => { refresh() } }]"
+              class="py-16"
+            />
+            <UEmpty
+              v-else-if="!rows.length"
               icon="i-lucide-inbox"
               title="Sin fugas en esta vista"
               description="Cuando lleguen reportes aparecerán aquí."
@@ -240,78 +307,33 @@ function onReset() {
         </section>
       </div>
 
-      <!-- Map + detail -->
+      <!-- Map + detail (or zones when nothing is selected) -->
       <aside class="flex min-h-0 flex-col gap-4">
         <div class="h-72 shrink-0 overflow-hidden rounded-xl ring ring-default lg:h-auto lg:flex-1">
           <MapView
             ref="map"
-            :incidents="rows"
+            :leaks="rows"
             :selected-id="selectedId"
             @select="select"
           />
         </div>
 
-        <section
-          v-if="selected"
-          class="max-h-[46%] shrink-0 space-y-4 overflow-y-auto rounded-xl bg-default p-4 ring ring-default"
-        >
-          <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <p class="text-xs text-muted tabular-nums">
-                {{ selected.id }} · {{ SEVERITY[selected.severity].label }}
-              </p>
-              <h2 class="truncate font-semibold text-highlighted">
-                {{ selected.address ?? fmtCoords(selected) }}
-              </h2>
-            </div>
-            <UButton
-              icon="i-lucide-x"
-              color="neutral"
-              variant="ghost"
-              size="sm"
-              aria-label="Cerrar detalle"
-              @click="selectedId = null"
-            />
-          </div>
-
-          <UButton
-            v-if="NEXT[selected.status]"
-            block
-            size="lg"
-            color="primary"
-            :icon="NEXT[selected.status]!.icon"
-            :label="NEXT[selected.status]!.label"
-            @click="advance(selected)"
+        <div class="shrink-0 overflow-y-auto lg:max-h-[55%]">
+          <LeakDetail
+            v-if="selected"
+            :leak="selected"
+            :crews="crews"
+            @update="patch => act(selected!, patch)"
+            @close="selectedId = null"
           />
-
-          <ol class="space-y-3">
-            <li
-              v-for="r in [...selected.reports].reverse()"
-              :key="r.id"
-              class="flex gap-3"
-            >
-              <img
-                v-if="r.photo"
-                :src="r.photo"
-                :alt="`Foto del reporte ${r.id}`"
-                class="size-12 shrink-0 rounded-lg object-cover"
-              >
-              <SeverityIcon
-                v-else
-                :severity="r.severity"
-                class="size-12!"
-              />
-              <div class="min-w-0 text-sm">
-                <p class="font-medium text-highlighted">
-                  {{ SEVERITY[r.severity].label }} <span class="font-normal text-muted">· {{ timeAgo(r.createdAt) }}</span>
-                </p>
-                <p class="truncate text-muted">
-                  {{ r.note ?? r.address ?? r.id }}
-                </p>
-              </div>
-            </li>
-          </ol>
-        </section>
+          <ZonesPanel
+            v-else
+            :zones="zones"
+            :crews="crews"
+            @assign="onAssignZone"
+            @focus="z => map?.flyTo({ lat: z.center_lat, lng: z.center_lng }, 16)"
+          />
+        </div>
       </aside>
     </main>
   </div>

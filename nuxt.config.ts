@@ -2,12 +2,17 @@
 export default defineNuxtConfig({
   modules: ['@nuxt/eslint', '@nuxt/ui', '@nuxt/image'],
 
-  // Map + localStorage app: no server rendering needed.
+  // Client-only dashboard behind a login: no server rendering needed.
   ssr: false,
 
   devtools: { enabled: true },
 
   css: ['~/assets/css/main.css'],
+
+  // Override with NUXT_PUBLIC_API_BASE.
+  runtimeConfig: {
+    public: { apiBase: 'https://agua-alerta-api.adrian9012.workers.dev' }
+  },
 
   // Citizen app runs on 3000.
   devServer: { port: 3001 },

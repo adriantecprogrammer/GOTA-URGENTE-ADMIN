@@ -1,10 +1,12 @@
 <script setup lang="ts">
-const props = defineProps<{ incident: Pick<Incident, 'urgency' | 'level' | 'status'>, size?: 'md' | 'lg' }>()
+import type { Leak } from '~/services/leaks'
+
+const props = defineProps<{ leak: Pick<Leak, 'urgency_score' | 'urgency_level' | 'status'>, size?: 'md' | 'lg' }>()
 
 // Filled = needs attention (crítica, alta). Everything else is a quiet outline, so colour keeps its meaning.
 const QUIET = 'bg-default text-highlighted ring-1 ring-inset ring-accented'
 const TONE: Record<Level, string> = { critica: 'bg-critica text-white', alta: 'bg-alta text-gota-950', media: QUIET, baja: QUIET }
-const tone = computed(() => props.incident.status === 'resuelto' ? 'text-muted ring-1 ring-inset ring-accented' : TONE[props.incident.level])
+const tone = computed(() => isOpen(props.leak.status) ? TONE[props.leak.urgency_level] : 'text-muted ring-1 ring-inset ring-accented')
 </script>
 
 <template>
@@ -13,7 +15,7 @@ const tone = computed(() => props.incident.status === 'resuelto' ? 'text-muted r
     :class="[tone, size === 'lg' ? 'size-14 text-2xl' : 'size-11 text-lg']"
   >
     <span class="sr-only">Urgencia</span>
-    {{ incident.urgency }}
-    <span class="sr-only">de 100, {{ LEVEL[incident.level].label }}</span>
+    {{ leak.urgency_score }}
+    <span class="sr-only">de 100, {{ LEVEL[leak.urgency_level].label }}</span>
   </span>
 </template>
