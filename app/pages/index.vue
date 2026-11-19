@@ -74,8 +74,11 @@ const oldestPending = computed(() => {
 
 // Desktop: the map is the whole screen and the panels float over it, so the camera centers between them.
 const desktop = useMediaQuery('(min-width: 1024px)', { ssrWidth: window.innerWidth })
+// Operator can hide the queue to see the bare map (desktop only; on small screens the panels stack).
+const hidden = ref(false)
+const showQueue = computed(() => !desktop.value || !hidden.value)
 const padding = computed(() => desktop.value
-  ? { left: 452, right: selectedId.value || zones.value.length ? 412 : 0 }
+  ? { left: hidden.value ? 0 : 452, right: selectedId.value || zones.value.length ? 412 : 0 }
   : { left: 0, right: 0 })
 
 /** Every change gets a toast with Deshacer, which re-PATCHes the previous values. */
@@ -146,6 +149,7 @@ watch(() => selected.value?.id, focusSelected)
 
     <!-- Left: briefing + queue -->
     <section
+      v-show="showQueue"
       class="flex min-h-0 flex-col bg-default lg:absolute lg:inset-y-4 lg:left-4 lg:w-[420px] lg:surface-float"
       aria-label="Cola de reparación"
     >
@@ -321,6 +325,19 @@ watch(() => selected.value?.id, focusSelected)
         </li>
       </ul>
     </section>
+
+    <UButton
+      v-if="desktop"
+      :icon="hidden ? 'i-lucide-panel-left-open' : 'i-lucide-panel-left-close'"
+      color="neutral"
+      variant="ghost"
+      size="lg"
+      class="surface-float absolute bottom-6 z-10 size-11 justify-center transition-[left] duration-300 motion-reduce:transition-none"
+      :style="{ left: hidden ? '1rem' : '444px' }"
+      :aria-label="hidden ? 'Mostrar la cola' : 'Ocultar la cola y ver todo el mapa'"
+      :aria-expanded="!hidden"
+      @click="hidden = !hidden"
+    />
 
     <!-- Right: the selected leak, or the joint-failure zones. Stops short of the bottom to leave the map controls free. -->
     <aside
