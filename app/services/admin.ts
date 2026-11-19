@@ -27,8 +27,20 @@ export interface Crew {
   saturated: boolean
 }
 
-/** Fixed service zone. Only what the crew editor needs; the API also sends polygon, priority, manager… */
-export interface Sector { id: number, name: string, color: string }
+/** Fixed service zone. The API also sends neighborhoods, manager… (unused). */
+export interface Sector {
+  id: number
+  name: string
+  /** #rrggbb meant for the map. */
+  color: string
+  /** Added to the urgency of its leaks (0–15). */
+  priority_points: number
+  crews: Pick<Crew, 'active_leaks' | 'max_active_leaks'>[]
+  geometry: { type: 'MultiPolygon', coordinates: number[][][][] }
+}
+
+/** What the zone layer paints: each zone's own colour, how loaded its crews are, or its priority. */
+export type SectorMode = 'off' | 'zona' | 'carga' | 'prioridad'
 
 /** Assignment notices; they never block, show them to the admin. */
 export interface Warning { code: 'crew_other_sector' | 'crew_saturated', message: string }
@@ -75,7 +87,7 @@ export const adminService = (http: typeof $fetch) => ({
     return { ...c, id: Number(c.id) }
   },
 
-  sectors: () => http<Sector[]>('/admin/sectors'),
+  sectors: async () => (await http<Sector[]>('/admin/sectors')).map(s => ({ ...s, id: Number(s.id) })),
 
   /** Dashboard list, most urgent first. Defaults to `activas`. */
   leaks: (status?: AdminLeakFilter) =>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { useIntervalFn, useMediaQuery, useNow, useTimeoutFn } from '@vueuse/core'
-import type { AdminLeak, AdminLeakPatch, Warning } from '~/services/admin'
+import { useStorage, useIntervalFn, useMediaQuery, useNow, useTimeoutFn } from '@vueuse/core'
+import type { AdminLeak, AdminLeakPatch, SectorMode, Warning } from '~/services/admin'
 import type { Zone } from '~/services/zones'
 
 useSeoMeta({ title: 'Panel operativo · Gota Urgente' })
@@ -115,6 +115,13 @@ async function onAssignZone(zone: Zone, crewId: number) {
 const warn = (ws?: Warning[]) => ws?.forEach(w => toast.add({ title: w.message, color: 'warning', icon: 'i-lucide-triangle-alert' }))
 
 const crewsOpen = ref(false)
+const sectorMode = useStorage<SectorMode>('gota-admin:sectors', 'zona')
+const SECTOR_MODES = [
+  { value: 'off', label: 'Sin zonas', icon: 'i-lucide-eye-off' },
+  { value: 'zona', label: 'Color por zona', icon: 'i-lucide-palette' },
+  { value: 'carga', label: 'Carga de cuadrillas', icon: 'i-lucide-gauge' },
+  { value: 'prioridad', label: 'Prioridad de la zona', icon: 'i-lucide-flag' }
+]
 async function saveCrew(id: number, patch: { sector_id?: number | null, max_active_leaks?: number }) {
   try {
     await updateCrew(id, patch)
@@ -152,6 +159,8 @@ watch(() => selected.value?.id, focusSelected)
     <div class="isolate h-[45dvh] shrink-0 lg:absolute lg:inset-0 lg:h-auto">
       <MapView
         ref="map"
+        :sectors="sectors"
+        :sector-mode="sectorMode"
         :leaks="rows"
         :zones="filter === 'resuelta' || filter === 'descartada' ? [] : zones"
         :selected-id="selectedId"
@@ -360,6 +369,17 @@ watch(() => selected.value?.id, focusSelected)
       :aria-label="hidden ? 'Mostrar la cola' : 'Ocultar la cola y ver todo el mapa'"
       :aria-expanded="!hidden"
       @click="hidden = !hidden"
+    />
+
+    <!-- What the service-zone layer paints. Desktop only: on phones the panels stack above the map. -->
+    <USelect
+      v-if="desktop"
+      v-model="sectorMode"
+      :items="SECTOR_MODES"
+      icon="i-lucide-layers"
+      aria-label="Capa de zonas de cuadrillas"
+      class="surface-float absolute bottom-6 z-10 w-56 transition-[left] duration-300 motion-reduce:transition-none"
+      :style="{ left: hidden ? '4.25rem' : '500px' }"
     />
 
     <!-- Right: the selected leak, or the joint-failure zones. Stops short of the bottom to leave the map controls free. -->
