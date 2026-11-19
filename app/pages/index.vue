@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { useIntervalFn, useMediaQuery, useNow, useTimeoutFn } from '@vueuse/core'
-import type { AdminLeak, AdminLeakPatch } from '~/services/admin'
+import type { AdminLeak, AdminLeakPatch, Warning } from '~/services/admin'
 import type { Zone } from '~/services/zones'
 
 useSeoMeta({ title: 'Panel operativo · Gota Urgente' })
 
 const { $api } = useNuxtApp()
 const { logout } = useAdminSession()
-const { leaks: { data: leaks, error, refresh }, zones: { data: zones }, crews: { data: crews }, update, assignZone, realtime } = useAdminLeaks()
+const { leaks: { data: leaks, error, refresh }, zones: { data: zones }, crews: { data: crews }, sectors: { data: sectors }, update, updateCrew, assignZone, realtime } = useAdminLeaks()
 const { data: me } = useAsyncData('me', () => $api.admin.me())
 const toast = useToast()
 
@@ -89,6 +89,7 @@ async function act(leak: AdminLeak, patch: AdminLeakPatch) {
   if ('severity' in patch) undo.severity = leak.max_severity
   try {
     const l = await update(leak.id, patch)
+    warn(l.warnings)
     toast.add({
       title: patch.status ? `#${l.id.slice(0, 8)} · ${STATUS[l.status].label}` : 'Fuga actualizada',
       description: [l.crew_name, patch.severity && `Severidad: ${SEVERITY[l.max_severity].label}`].filter(Boolean).join(' · ') || undefined,
@@ -103,7 +104,20 @@ async function act(leak: AdminLeak, patch: AdminLeakPatch) {
 async function onAssignZone(zone: Zone, crewId: number) {
   try {
     const r = await assignZone(zone.leak_ids, crewId)
+    warn(r.warnings)
     toast.add({ title: `Cuadrilla asignada a ${r.updated} fugas`, description: crews.value.find(c => c.id === crewId)?.name, icon: 'i-lucide-hard-hat' })
+  } catch (e) {
+    fail(e)
+  }
+}
+
+/** Assignment notices from the API (other zone, over capacity): shown, never blocking. */
+const warn = (ws?: Warning[]) => ws?.forEach(w => toast.add({ title: w.message, color: 'warning', icon: 'i-lucide-triangle-alert' }))
+
+const crewsOpen = ref(false)
+async function saveCrew(id: number, patch: { sector_id?: number | null, max_active_leaks?: number }) {
+  try {
+    await updateCrew(id, patch)
   } catch (e) {
     fail(e)
   }
@@ -170,6 +184,15 @@ watch(() => selected.value?.id, focusSelected)
           v-if="me"
           class="ms-auto hidden min-w-0 truncate text-sm text-muted sm:inline"
         >{{ me.name }}</span>
+        <UButton
+          v-if="me?.role === 'admin'"
+          icon="i-lucide-hard-hat"
+          color="neutral"
+          variant="ghost"
+          :class="me ? '' : 'ms-auto'"
+          aria-label="Gestionar cuadrillas"
+          @click="crewsOpen = true"
+        />
         <UButton
           icon="i-lucide-log-out"
           color="neutral"
@@ -359,5 +382,19 @@ watch(() => selected.value?.id, focusSelected)
         @focus="z => map?.flyTo({ lat: z.center_lat, lng: z.center_lng }, 16)"
       />
     </aside>
+
+    <UModal
+      v-model:open="crewsOpen"
+      title="Cuadrillas"
+      description="Zona y capacidad de cada cuadrilla"
+    >
+      <template #body>
+        <CrewsPanel
+          :crews="crews"
+          :sectors="sectors"
+          @save="saveCrew"
+        />
+      </template>
+    </UModal>
   </div>
 </template>

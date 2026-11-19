@@ -18,7 +18,20 @@ export interface LoginResult {
 export interface Crew {
   id: number
   name: string
+  /** null = no zone (wildcard). */
+  sector_id: number | null
+  sector_name: string | null
+  /** pendiente + en_atencion assigned to it. */
+  active_leaks: number
+  max_active_leaks: number
+  saturated: boolean
 }
+
+/** Fixed service zone. Only what the crew editor needs; the API also sends polygon, priority, manager… */
+export interface Sector { id: number, name: string, color: string }
+
+/** Assignment notices; they never block, show them to the admin. */
+export interface Warning { code: 'crew_other_sector' | 'crew_saturated', message: string }
 
 export interface AdminLeak extends Leak {
   confirmation_count: number
@@ -32,6 +45,12 @@ export interface AdminLeak extends Leak {
   zone_size: number
   attended_at: string | null
   resolved_at: string | null
+  sector_id: number | null
+  sector_name: string | null
+  suggested_crew_id: number | null
+  suggested_crew_name: string | null
+  /** Only on PATCH responses. */
+  warnings?: Warning[]
 }
 
 /** `activas` = pendiente + en_atencion. */
@@ -50,6 +69,14 @@ export const adminService = (http: typeof $fetch) => ({
   crews: async () =>
     (await http<Crew[]>('/admin/crews')).map(c => ({ ...c, id: Number(c.id) })),
 
+  /** Admin role only. `sector_id: null` leaves the crew without zone. */
+  updateCrew: async (id: number, patch: { sector_id?: number | null, max_active_leaks?: number }) => {
+    const c = await http<Crew>(`/admin/crews/${id}`, { method: 'PATCH', body: patch })
+    return { ...c, id: Number(c.id) }
+  },
+
+  sectors: () => http<Sector[]>('/admin/sectors'),
+
   /** Dashboard list, most urgent first. Defaults to `activas`. */
   leaks: (status?: AdminLeakFilter) =>
     http<AdminLeak[]>('/admin/leaks', { query: { status } }),
@@ -60,5 +87,5 @@ export const adminService = (http: typeof $fetch) => ({
 
   /** Assign one crew to every active leak of a zone (closed ones are ignored). */
   assignZone: (leak_ids: string[], crew_id: number) =>
-    http<{ updated: number, leak_ids: string[] }>('/admin/zones/assign', { method: 'POST', body: { leak_ids, crew_id } })
+    http<{ updated: number, leak_ids: string[], warnings: Warning[] }>('/admin/zones/assign', { method: 'POST', body: { leak_ids, crew_id } })
 })

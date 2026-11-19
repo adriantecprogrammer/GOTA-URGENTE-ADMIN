@@ -42,6 +42,7 @@ const center = (z: Zone) => ({ lat: z.center_lat, lng: z.center_lng })
         </button>
         <CrewMenu
           :crews="crews"
+          :sector-id="z.sector_id"
           @pick="crewId => emit('assign', z, crewId)"
         >
           <UButton
