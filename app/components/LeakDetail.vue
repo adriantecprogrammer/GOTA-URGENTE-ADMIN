@@ -129,6 +129,8 @@ const open = computed(() => isOpen(props.leak.status))
       <CrewMenu
         v-if="leak.status === 'pendiente'"
         :crews="crews"
+        :sector-id="leak.sector_id"
+        :suggested-id="leak.suggested_crew_id"
         @pick="crew_id => emit('update', { status: 'en_atencion', crew_id })"
       >
         <UButton
@@ -151,6 +153,8 @@ const open = computed(() => isOpen(props.leak.status))
         />
         <CrewMenu
           :crews="crews"
+          :sector-id="leak.sector_id"
+          :suggested-id="leak.suggested_crew_id"
           @pick="crew_id => emit('update', { crew_id })"
         >
           <UButton

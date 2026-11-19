@@ -8,6 +8,8 @@ export interface Zone {
   center_lat: number
   center_lng: number
   leak_ids: string[]
+  sector_id: number | null
+  sector_name: string | null
 }
 
 export const zonesService = (http: typeof $fetch) => ({

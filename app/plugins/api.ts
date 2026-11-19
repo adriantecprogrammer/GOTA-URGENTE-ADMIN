@@ -4,7 +4,7 @@ import { adminService } from '~/services/admin'
 // Postgres bigints arrive as strings ("3"); turn them into numbers once, here, for every entity.
 const INT_KEYS = new Set([
   'report_count', 'urgency_score', 'liters_wasted', 'liters_per_day', 'confirmation_count',
-  'crew_id', 'zone_id', 'zone_size', 'leak_count', 'max_urgency', 'updated'
+  'crew_id', 'zone_id', 'sector_id', 'suggested_crew_id', 'active_leaks', 'priority_points', 'max_active_leaks', 'zone_size', 'leak_count', 'max_urgency', 'updated'
 ])
 const reviver = (key: string, value: unknown) =>
   INT_KEYS.has(key) && typeof value === 'string' ? Number(value) : value
