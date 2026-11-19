@@ -10,7 +10,7 @@ const center = (z: Zone) => ({ lat: z.center_lat, lng: z.center_lng })
 
 <template>
   <!-- ≥3 distinct leaks within 250 m: one crew, one trip, several leaks. -->
-  <section class="space-y-3 rounded-xl bg-default p-4 ring ring-default">
+  <section class="space-y-3 p-5">
     <div>
       <h2 class="font-semibold text-highlighted">
         Zonas con falla conjunta

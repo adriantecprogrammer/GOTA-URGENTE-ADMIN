@@ -1,10 +1,6 @@
-import { useIntervalFn } from '@vueuse/core'
 import type { AdminLeakPatch } from '~/services/admin'
 
-/** Polling interval until MQTT exists; MQTT will only ring the bell, the data always comes from the API. */
-export const POLL_MS = 10_000
-
-/** Dashboard data: every leak (all statuses) + zones + crews, polled together. */
+/** Dashboard data: every leak (all statuses) + zones + crews, kept fresh by the MQTT doorbell + polling. */
 export function useAdminLeaks() {
   const { $api } = useNuxtApp()
 
@@ -13,8 +9,9 @@ export function useAdminLeaks() {
   const zones = useAsyncData('zones', () => $api.zones.list(), { default: () => [] })
   const crews = useAsyncData('crews', () => $api.admin.crews(), { default: () => [] })
 
+  // A new report changes both the queue and the zones.
   const refresh = () => Promise.all([leaks.refresh(), zones.refresh()])
-  useIntervalFn(refresh, POLL_MS)
+  const realtime = useLeakRealtime(refresh)
   watch([leaks.data, zones.data], ([l, z]) => queueAddresses([...l, ...z.map(z => ({ lat: z.center_lat, lng: z.center_lng }))]), { immediate: true })
 
   /** PATCH and swap the row in place with the server's recomputed version. */
@@ -30,5 +27,5 @@ export function useAdminLeaks() {
     return r
   }
 
-  return { leaks, zones, crews, refresh, update, assignZone }
+  return { leaks, zones, crews, refresh, update, assignZone, realtime }
 }

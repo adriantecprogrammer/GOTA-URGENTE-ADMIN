@@ -10,9 +10,10 @@ const open = computed(() => isOpen(props.leak.status))
 </script>
 
 <template>
-  <section class="space-y-4 rounded-xl bg-default p-4 ring ring-default">
-    <div class="flex items-start justify-between gap-3">
-      <div class="min-w-0">
+  <section class="space-y-4 p-5">
+    <div class="flex items-start gap-3">
+      <UrgencyScore :leak="leak" />
+      <div class="min-w-0 flex-1">
         <p class="text-xs text-muted uppercase tabular-nums">
           #{{ leak.id.slice(0, 8) }}
         </p>
@@ -32,22 +33,28 @@ const open = computed(() => isOpen(props.leak.status))
 
     <div
       v-if="leak.is_recurrent || leak.zone_size >= 3"
-      class="flex flex-wrap gap-2"
+      class="space-y-1.5 border-y border-default py-3 text-sm font-medium text-highlighted"
     >
-      <UBadge
-        v-if="leak.is_recurrent"
-        color="warning"
-        variant="subtle"
-        icon="i-lucide-history"
-        label="Reincidente: ya se había reparado aquí"
-      />
-      <UBadge
+      <p
         v-if="leak.zone_size >= 3"
-        color="error"
-        variant="subtle"
-        icon="i-lucide-network"
-        :label="`Zona de ${leak.zone_size} fugas · posible falla en red primaria`"
-      />
+        class="flex items-center gap-2"
+      >
+        <UIcon
+          name="i-lucide-network"
+          class="size-4 shrink-0 text-critica"
+        />
+        Zona de {{ leak.zone_size }} fugas: posible falla en la red primaria
+      </p>
+      <p
+        v-if="leak.is_recurrent"
+        class="flex items-center gap-2"
+      >
+        <UIcon
+          name="i-lucide-history"
+          class="size-4 shrink-0 text-alta"
+        />
+        Reincidente: ya se había reparado aquí
+      </p>
     </div>
 
     <!-- The photo justifies a "descartada". -->
